@@ -9,7 +9,7 @@ import humanize
 class ND2Analyzer:
     def __init__(self, base_path="/home/aaristov/Multicell"):
         self.base_path = Path(base_path)
-        self.db_path = 'storage.db'
+        self.db_path = 'instance/storage.db'
         self.findings = []
 
     def get_file_info(self, file_path):
