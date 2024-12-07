@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Multicell Storage Monitor</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+</head>
+<body class="bg-gray-100">
+    <div class="container mx-auto px-4 py-8">
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+            <h1 class="text-2xl font-bold mb-4">Multicell Storage Monitor</h1>
+            
+            <!-- Storage Status -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-blue-800">Total Capacity</h3>
+                    <p class="text-2xl font-bold text-blue-600">
+                        {{ humanize.naturalsize(storage_status.capacity, binary=True) }}
+                    </p>
+                </div>
+                
+                <div class="bg-green-50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-green-800">Available Space</h3>
+                    <p class="text-2xl font-bold text-green-600">
+                        {{ humanize.naturalsize(storage_status.available, binary=True) }}
+                    </p>
+                </div>
+                
+                <div class="bg-{{ 'red' if storage_status.warning_level == 'critical' 
+                                 else 'yellow' if storage_status.warning_level == 'warning'
+                                 else 'blue' }}-50 rounded-lg p-4">
+                    <h3 class="text-lg font-semibold text-{{ 'red' if storage_status.warning_level == 'critical' 
+                                                           else 'yellow' if storage_status.warning_level == 'warning'
+                                                           else 'blue' }}-800">Usage</h3>
+                    <p class="text-2xl font-bold text-{{ 'red' if storage_status.warning_level == 'critical' 
+                                                       else 'yellow' if storage_status.warning_level == 'warning'
+                                                       else 'blue' }}-600">
+                        {{ "%.1f"|format(storage_status.usage_percent) }}%
+                    </p>
+                </div>
+            </div>
+
+            <!-- Usage Bar -->
+            <div class="mb-6">
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div class="bg-{{ 'red' if storage_status.warning_level == 'critical' 
+                                     else 'yellow' if storage_status.warning_level == 'warning'
+                                     else 'blue' }}-600 rounded-full h-4"
+                         style="width: {{ storage_status.usage_percent }}%">
+                    </div>
+                </div>
+            </div>
+
+            {% if storage_status.warning_level in ['warning', 'critical'] %}
+            <div class="bg-{{ 'red' if storage_status.warning_level == 'critical' else 'yellow' }}-50 
+                        border-l-4 border-{{ 'red' if storage_status.warning_level == 'critical' else 'yellow' }}-400 p-4 mb-6">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <svg class="h-5 w-5 text-{{ 'red' if storage_status.warning_level == 'critical' else 'yellow' }}-400" 
+                             viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" 
+                                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" 
+                                  clip-rule="evenodd"/>
+                        </svg>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-{{ 'red' if storage_status.warning_level == 'critical' else 'yellow' }}-800">
+                            {{ 'Critical Storage Alert' if storage_status.warning_level == 'critical' else 'Storage Warning' }}
+                        </h3>
+                        <div class="mt-2 text-sm text-{{ 'red' if storage_status.warning_level == 'critical' else 'yellow' }}-700">
+                            {{ 'Storage usage is critically high. Immediate action required.' if storage_status.warning_level == 'critical' 
+                               else 'Storage usage is high. Please review your data and free up space.' }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- User Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {% for user in users %}
+            <div class="bg-white rounded-lg shadow p-6">
+                <h2 class="text-xl font-bold mb-2">{{ user.folder }}</h2>
+                <div class="text-gray-600 mb-2">
+                    {{ humanize.naturalsize(user.size_bytes, binary=True) }}
+                </div>
+                <div class="mb-4">
+                    {% set percentage = (user.size_bytes / storage_status.capacity * 100) | round(1) %}
+                    <div class="bg-gray-200 rounded-full h-4">
+                        <div class="bg-blue-600 rounded-full h-4" style="width: {{ percentage }}%"></div>
+                    </div>
+                    <div class="text-sm text-gray-600 mt-1">{{ percentage }}% of total capacity</div>
+                </div>
+                <a href="{{ url_for('user_detail', username=user.folder) }}" 
+                   class="text-blue-600 hover:text-blue-800">View Details →</a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</body>
+</html>
