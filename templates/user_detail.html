@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ user.folder }} - Storage Details</title>
+    <title>{{ user.folder }} - Multicell Storage Details</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
 </head>
@@ -13,10 +13,25 @@
                 <a href="/" class="text-blue-600 hover:text-blue-800">← Back to Overview</a>
             </div>
             
-            <div class="mb-6">
-                <h2 class="text-xl font-bold mb-2">Current Usage</h2>
-                <div class="text-gray-600">
-                    {{ humanize.naturalsize(user.size_bytes, binary=True) }}
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <h2 class="text-lg font-semibold text-blue-800">Current Usage</h2>
+                    <p class="text-2xl font-bold text-blue-600">
+                        {{ humanize.naturalsize(user.size_bytes, binary=True) }}
+                    </p>
+                    <p class="text-sm text-blue-600 mt-1">
+                        {{ "%.1f"|format(user.size_bytes / storage_status.capacity * 100) }}% of total capacity
+                    </p>
+                </div>
+
+                <div class="bg-green-50 rounded-lg p-4">
+                    <h2 class="text-lg font-semibold text-green-800">Multicell Status</h2>
+                    <p class="text-2xl font-bold text-green-600">
+                        {{ "%.1f"|format(storage_status.usage_percent) }}% Full
+                    </p>
+                    <p class="text-sm text-green-600 mt-1">
+                        {{ humanize.naturalsize(storage_status.available, binary=True) }} Available
+                    </p>
                 </div>
             </div>
 
@@ -25,30 +40,58 @@
                 <canvas id="historyChart" height="100"></canvas>
             </div>
 
-            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-                <div class="flex">
-                    <div class="flex-shrink-0">
-                        <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
-                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
-                        </svg>
+            {% if nd2_stats %}
+            <div class="mt-8">
+                <h2 class="text-xl font-bold mb-4">ND2 Files Analysis</h2>
+                
+                <!-- Age Categories Summary -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    {% for stat in nd2_stats %}
+                    <div class="bg-white rounded-lg shadow p-4">
+                        <h3 class="text-sm font-semibold text-gray-600">
+                            {{ stat.age_category.replace('_', ' ').title() }}
+                        </h3>
+                        <p class="text-lg font-bold">
+                            {{ humanize.naturalsize(stat.total_size, binary=True) }}
+                        </p>
+                        <p class="text-sm text-gray-500">
+                            {{ stat.file_count }} files
+                        </p>
+                        {% if stat.oldest_access %}
+                        <p class="text-xs text-gray-400 mt-1">
+                            Last accessed: {{ stat.oldest_access[:10] }}
+                        </p>
+                        {% endif %}
                     </div>
-                    <div class="ml-3">
-                        <h3 class="text-sm font-medium text-yellow-800">Storage Usage Tips</h3>
-                        <div class="mt-2 text-sm text-yellow-700">
-                            <ul class="list-disc pl-5 space-y-1">
-                                <li>Consider compressing large files</li>
-                                <li>Remove duplicate files</li>
-                                <li>Archive old projects</li>
-                                <li>Delete temporary files and downloads</li>
-                            </ul>
+                    {% endfor %}
+                </div>
+                
+                <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4">
+                    <div class="flex">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <h3 class="text-sm font-medium text-yellow-800">Storage Optimization Tips</h3>
+                            <div class="mt-2 text-sm text-yellow-700">
+                                <ul class="list-disc pl-5 space-y-1">
+                                    <li>Consider moving older ND2 files (>6 months) to cold storage</li>
+                                    <li>Archive processed data that hasn't been accessed recently</li>
+                                    <li>Review and remove any temporary files or duplicates</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
     </div>
 
     <script>
+        // Existing storage history chart
         fetch('/api/user/{{ user.folder }}/history')
             .then(response => response.json())
             .then(data => {

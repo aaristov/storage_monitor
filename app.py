@@ -2,8 +2,6 @@ from flask import Flask, render_template, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 import humanize
-from apscheduler.schedulers.background import BackgroundScheduler
-import sqlite3
 import pandas as pd
 
 app = Flask(__name__)
@@ -20,7 +18,6 @@ class StorageData(db.Model):
     date = db.Column(db.DateTime)
     last_modified = db.Column(db.DateTime)
 
-# Data access functions
 def get_latest_storage_data():
     """Get the most recent storage data for all users"""
     subquery = db.session.query(
@@ -72,41 +69,74 @@ def get_storage_status():
         
     return status
 
-# Import data from existing SQLite database
-def import_existing_data():
-    """Import data from the existing storage_data table"""
+def get_nd2_summary():
+    """Get summary of ND2 files by age categories"""
+    query = """
+    SELECT 
+        user,
+        CASE 
+            WHEN julianday('now') - julianday(last_access) <= 30 THEN '1_month'
+            WHEN julianday('now') - julianday(last_access) <= 90 THEN '3_months'
+            WHEN julianday('now') - julianday(last_access) <= 180 THEN '6_months'
+            ELSE '12_plus_months'
+        END as age_category,
+        COUNT(*) as file_count,
+        SUM(size_bytes) as total_size
+    FROM nd2_files
+    GROUP BY user, age_category
+    ORDER BY user, age_category
+    """
+    
     try:
-        source_conn = sqlite3.connect('../storage_data.db')  # Update path as needed
-        query = "SELECT folder, size_bytes, date, last_modified FROM storage_data"
-        df = pd.read_sql_query(query, source_conn)
-        source_conn.close()
+        with db.engine.connect() as conn:
+            return pd.read_sql(query, conn)
+    except:
+        return pd.DataFrame()
 
-        for _, row in df.iterrows():
-            storage_entry = StorageData(
-                folder=row['folder'],
-                size_bytes=row['size_bytes'],
-                date=datetime.strptime(row['date'], '%Y-%m-%d %H:%M:%S.%f'),
-                last_modified=datetime.strptime(row['last_modified'], '%Y-%m-%d %H:%M:%S.%f')
-            )
-            db.session.add(storage_entry)
-        
-        db.session.commit()
-        print("Data imported successfully")
-    except Exception as e:
-        print(f"Error importing data: {e}")
+def get_user_nd2_stats(username):
+    """Get ND2 statistics for a specific user"""
+    query = """
+    SELECT 
+        CASE 
+            WHEN julianday('now') - julianday(last_access) <= 30 THEN '1_month'
+            WHEN julianday('now') - julianday(last_access) <= 90 THEN '3_months'
+            WHEN julianday('now') - julianday(last_access) <= 180 THEN '6_months'
+            ELSE '12_plus_months'
+        END as age_category,
+        COUNT(*) as file_count,
+        SUM(size_bytes) as total_size,
+        MIN(last_access) as oldest_access,
+        MAX(last_access) as newest_access
+    FROM nd2_files
+    WHERE user = ?
+    GROUP BY age_category
+    ORDER BY age_category
+    """
+    
+    try:
+        with db.engine.connect() as conn:
+            stats = pd.read_sql(query, conn, params=[username])
+            # Convert to dictionary for easier template handling
+            return stats.to_dict('records')
+    except:
+        return []
 
 # Routes
 @app.route('/')
 def index():
     users = get_latest_storage_data()
     storage_status = get_storage_status()
+    nd2_summary = get_nd2_summary()
+    
     return render_template('index.html', 
                          users=users,
                          storage_status=storage_status,
+                         nd2_summary=nd2_summary,
                          humanize=humanize)
 
 @app.route('/api/user/<username>/history')
-def user_history(username):
+def user_history_api(username):
+    """API endpoint for user storage history"""
     history = get_user_history(username)
     return jsonify([{
         'date': entry.date.isoformat(),
@@ -119,10 +149,13 @@ def user_detail(username):
     user_data = StorageData.query.filter_by(folder=username).order_by(StorageData.date.desc()).first()
     history = get_user_history(username)
     storage_status = get_storage_status()
+    nd2_stats = get_user_nd2_stats(username)
+    
     return render_template('user_detail.html',
                          user=user_data,
                          history=history,
                          storage_status=storage_status,
+                         nd2_stats=nd2_stats,
                          humanize=humanize)
 
 if __name__ == '__main__':
