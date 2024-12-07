@@ -6,10 +6,11 @@ import sqlite3
 from datetime import datetime, timedelta
 import humanize
 
+DB='instance/storage.db'
 class ND2Analyzer:
     def __init__(self, base_path="/home/aaristov/Multicell"):
         self.base_path = Path(base_path)
-        self.db_path = 'instance/storage.db'
+        self.db_path = DB
         self.findings = []
 
     def get_file_info(self, file_path):
@@ -64,7 +65,7 @@ def main():
     analyzer = ND2Analyzer()
     
     # Get list of users from storage monitoring database
-    with sqlite3.connect('storage.db') as conn:
+    with sqlite3.connect(DB) as conn:
         users = pd.read_sql("SELECT DISTINCT folder FROM storage_data", conn)['folder'].tolist()
     
     for user in users:
