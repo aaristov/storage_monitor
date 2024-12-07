@@ -115,10 +115,11 @@ def get_user_nd2_stats(username):
     
     try:
         with db.engine.connect() as conn:
-            stats = pd.read_sql(query, conn, params=[username])
+            stats = pd.read_sql(query, conn, params=[(username,)])
             # Convert to dictionary for easier template handling
             return stats.to_dict('records')
-    except:
+    except Exception as e:
+        print(e)
         return []
 
 # Routes
