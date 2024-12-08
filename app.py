@@ -3,11 +3,13 @@ from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime, timedelta
 import humanize
 import pandas as pd
+import os
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///storage.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['TOTAL_STORAGE_CAPACITY'] = 80 * 1024**4  # 80 TB in bytes
+app.config['BASE_PATH'] = '/home/aaristov'
 db = SQLAlchemy(app)
 
 # Models
@@ -69,39 +71,15 @@ def get_storage_status():
         
     return status
 
-def get_nd2_summary():
+def get_user_nd2_stats(username):
     """Get summary of ND2 files by age categories"""
     query = """
     SELECT 
-        user,
         CASE 
             WHEN julianday('now') - julianday(last_access) <= 30 THEN '1_month'
             WHEN julianday('now') - julianday(last_access) <= 90 THEN '3_months'
             WHEN julianday('now') - julianday(last_access) <= 180 THEN '6_months'
-            ELSE '12_plus_months'
-        END as age_category,
-        COUNT(*) as file_count,
-        SUM(size_bytes) as total_size
-    FROM nd2_files
-    GROUP BY user, age_category
-    ORDER BY user, age_category
-    """
-    
-    try:
-        with db.engine.connect() as conn:
-            return pd.read_sql(query, conn)
-    except:
-        return pd.DataFrame()
-
-def get_user_nd2_stats(username):
-    """Get ND2 statistics for a specific user"""
-    query = """
-    SELECT 
-        CASE 
-            WHEN julianday('now') - julianday(last_access) <= 30 THEN '1_month'
-            WHEN julianday('now') - julianday(last_access) <= 90 THEN '3_months'
-            WHEN julianday('now') - julianday(last_access) <= 180 THEN '6_months'
-            ELSE '12_plus_months'
+            ELSE '6_plus_months'
         END as age_category,
         COUNT(*) as file_count,
         SUM(size_bytes) as total_size,
@@ -115,11 +93,38 @@ def get_user_nd2_stats(username):
     
     try:
         with db.engine.connect() as conn:
-            stats = pd.read_sql(query, conn, params=[(username,)])
-            # Convert to dictionary for easier template handling
-            return stats.to_dict('records')
+            df = pd.read_sql(query, conn, params=[(username,)])
+            print(df.to_dict('records'))
+            return df.to_dict('records')
     except Exception as e:
-        print(e)
+        raise e
+        return []
+
+def get_user_nd2_details(username):
+    """Get detailed ND2 file information for a specific user"""
+    query = """
+    SELECT 
+        path,
+        size_bytes,
+        last_access,
+        CASE 
+            WHEN julianday('now') - julianday(last_access) <= 30 THEN '1_month'
+            WHEN julianday('now') - julianday(last_access) <= 90 THEN '3_months'
+            WHEN julianday('now') - julianday(last_access) <= 180 THEN '6_months'
+            ELSE '6_plus_months'
+        END as age_category
+    FROM nd2_files
+    WHERE user = ?
+    ORDER BY last_access DESC
+    """
+    
+    try:
+        with db.engine.connect() as conn:
+            df = pd.read_sql(query, conn, params=[(username,)])
+            df['relative_path'] = df['path'].apply(lambda x: x.replace(app.config['BASE_PATH'], ''))
+            return df.to_dict('records')
+    except Exception as e:
+        raise e
         return []
 
 # Routes
@@ -127,12 +132,10 @@ def get_user_nd2_stats(username):
 def index():
     users = get_latest_storage_data()
     storage_status = get_storage_status()
-    nd2_summary = get_nd2_summary()
     
     return render_template('index.html', 
                          users=users,
                          storage_status=storage_status,
-                         nd2_summary=nd2_summary,
                          humanize=humanize)
 
 @app.route('/api/user/<username>/history')
@@ -151,12 +154,14 @@ def user_detail(username):
     history = get_user_history(username)
     storage_status = get_storage_status()
     nd2_stats = get_user_nd2_stats(username)
+    nd2_details = get_user_nd2_details(username)
     
     return render_template('user_detail.html',
                          user=user_data,
                          history=history,
                          storage_status=storage_status,
                          nd2_stats=nd2_stats,
+                         nd2_details=nd2_details,
                          humanize=humanize)
 
 if __name__ == '__main__':

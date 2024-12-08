@@ -98,31 +98,6 @@
             {% endfor %}
         </div>
     </div>
-    <div class="mt-8">
-        <h2 class="text-xl font-bold mb-4">ND2 Files Analysis</h2>
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {% for user, group in nd2_summary.groupby('user') %}
-            <div class="bg-white rounded-lg shadow p-6">
-                <h3 class="text-lg font-bold mb-3">{{ user }}</h3>
-                <div class="space-y-2">
-                    {% for _, row in group.iterrows() %}
-                    <div class="flex justify-between items-center">
-                        <span class="text-gray-600">
-                            {{ row.age_category.replace('_', ' ').title() }}
-                        </span>
-                        <span class="flex space-x-4">
-                            <span class="text-blue-600">{{ row.file_count }} files</span>
-                            <span class="font-medium">
-                                {{ humanize.naturalsize(row.total_size, binary=True) }}
-                            </span>
-                        </span>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-            {% endfor %}
-        </div>
-    </div>
 </div>
 </body>
 </html>
